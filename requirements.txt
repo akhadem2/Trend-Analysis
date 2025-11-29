@@ -3,3 +3,7 @@ scikit-learn==1.0.2
 streamlit
 nltk
 shap
+xgboost
+imbalanced-learn
+seaborn
+matplotlib

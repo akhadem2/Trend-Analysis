@@ -52,6 +52,14 @@ def load_model():
 
 model = load_model()
 # Load feature list if present for importance ranking
+label_encoder_path = os.path.join("models", "label_encoder.pkl")
+if model is not None and os.path.exists(label_encoder_path) and joblib is not None:
+    try:
+        model.label_encoder_ = joblib.load(label_encoder_path)
+        model.class_labels_ = model.label_encoder_.classes_
+    except Exception as e:
+        st.warning(f"Could not load label encoder: {e}")
+
 feature_list = None
 feature_list_path = os.path.join("models", "feature_list.pkl")
 if os.path.exists(feature_list_path) and joblib is not None:
@@ -143,6 +151,8 @@ if submitted:
         "region_platform_avg_share_rate": viral_share_baseline,
         "region_platform_avg_rel_like": 1.0,
         "region_platform_avg_rel_share": 1.0,
+                "title_sentiment": sentiment_score or 0.0,  # add this line
+
     }
 
     if model is not None:
