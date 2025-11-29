@@ -202,4 +202,145 @@ if submitted:
     with st.expander("Derived content features"):
         st.json(content_feats)
 
+
+    st.subheader("Model Snapshot")
+if model is None:
+    st.info("No trained model found; using heuristic fallback.")
+else:
+    # Load label encoder if you saved it
+
+    metrics_path = os.path.join("models", "metrics.json")
+    if os.path.exists(metrics_path):
+        import json
+        with open(metrics_path) as f:
+            m = json.load(f)
+
+        # Show metrics for the selected model if present, otherwise fallback
+        selected_key = m.get("selected")
+        if selected_key and selected_key in m and isinstance(m[selected_key], dict):
+            sel = m[selected_key]
+            cv_mean = sel.get("cv_f1_mean")
+            cv_std = sel.get("cv_f1_std")
+            acc = sel.get("acc")
+            f1_macro = sel.get("f1_macro")
+            label = selected_key
+        else:
+            # Legacy single-model shape: { "cv": {...}, "holdout": {...} }
+            sel = None
+            cv = m.get("cv", {})
+            holdout = m.get("holdout", {})
+            cv_mean = cv.get("f1_mean")
+            cv_std = cv.get("f1_std")
+            acc = holdout.get("accuracy")
+            f1_macro = holdout.get("f1_macro")
+            label = "model"
+
+        if cv_mean is not None and cv_std is not None:
+            st.markdown(f"- {label} CV macro F1: {cv_mean:.3f} ± {cv_std:.3f}")
+        if acc is not None and f1_macro is not None:
+            st.markdown(f"- {label} Holdout: acc {acc:.3f}, macro F1 {f1_macro:.3f}")
+
+
+
+
+    label_encoder_path = os.path.join("models", "label_encoder.pkl")
+    if os.path.exists(label_encoder_path) and joblib is not None:
+        try:
+            model.label_encoder_ = joblib.load(label_encoder_path)
+            model.class_labels_ = model.label_encoder_.classes_
+        except Exception as e:
+            st.warning(f"Could not load label encoder: {e}")
+
+    model_name = type(getattr(model, "named_steps", {}).get("model", model)).__name__
+    raw_classes = getattr(model, "class_labels_", None)
+    if raw_classes is None:
+        raw_classes = getattr(model, "classes_", None)
+
+    if raw_classes is None:
+        classes = []
+    else:
+        classes = list(raw_classes.tolist()) if hasattr(raw_classes, "tolist") else list(raw_classes)
+
+    if classes:
+        st.markdown(f"- **Classes:** {', '.join(classes)}")
+
+    st.markdown(f"- **Model:** {model_name}")
+    
+    if feature_list:
+        st.markdown(f"- **Feature count:** {len(feature_list)}")
+        st.markdown(f"- **Key features:** {', '.join(feature_list[:8])} …")
+
+
+    st.subheader("Model Catalog")
+    metrics_path = os.path.join("models", "metrics.json")
+    if os.path.exists(metrics_path):
+        import json
+        with open(metrics_path) as f:
+            m = json.load(f)
+        # Expecting a dict of model_name -> metrics; adjust keys to what you saved
+        # Example structure to save from the notebook:
+        # {
+        #   "random_forest": {"cv_f1_mean": 0.79, "cv_f1_std": 0.002, "acc": 0.837, "f1_macro": 0.798},
+        #   "xgb_smote": {"cv_f1_mean": 0.82, "cv_f1_std": 0.004, "acc": 0.85, "f1_macro": 0.83}
+        # }
+        chosen_type = type(getattr(model, "named_steps", {}).get("model", model)).__name__.lower()
+        selected_name = m.get("selected")
+        for name, stats in m.items():
+            if name == "selected":
+                continue
+            label = name
+            if selected_name and name == selected_name:
+                label = f"**{name}**"
+            elif name.lower() in chosen_type:
+                label = f"**{name}**"
+
+            cv_mean = stats.get("cv_f1_mean")
+            cv_std = stats.get("cv_f1_std")
+            acc = stats.get("acc")
+            f1_macro = stats.get("f1_macro")
+
+            parts = []
+            if cv_mean is not None and cv_std is not None:
+                parts.append(f"CV F1 {cv_mean:.3f} +/- {cv_std:.3f}")
+            if acc is not None:
+                parts.append(f"acc {acc:.3f}")
+            if f1_macro is not None:
+                parts.append(f"macro F1 {f1_macro:.3f}")
+
+            if parts:
+                st.markdown(f"- {label}: " + "; ".join(parts))
+            else:
+                st.markdown(f"- {label}: metrics not available")
+    else:
+        st.info("No metrics.json found; save metrics for each model from the notebook.")
+
+    
+    # If you saved CV metrics to disk, load and display them:
+    # cv_info_path = os.path.join("models", "cv_metrics.json")
+    # if os.path.exists(cv_info_path):
+    #     import json
+    #     with open(cv_info_path) as f:
+    #         cv_info = json.load(f)
+    #     st.markdown(f"- **CV macro F1:** {cv_info['f1_mean']:.3f} ± {cv_info['f1_std']:.3f}")
+
+    with st.expander("Feature Importance"):
+        has_features = feature_list is not None and len(feature_list) > 0
+        if has_features:
+            mdl = model.named_steps.get("model", model) if hasattr(model, "named_steps") else model
+            if hasattr(mdl, "feature_importances_"):
+                importances = mdl.feature_importances_
+                top = sorted(zip(feature_list, importances), key=lambda x: x[1], reverse=True)
+                st.table({"feature": [f for f, _ in top], "importance": [float(i) for _, i in top]})
+            else:
+                st.write("Model does not expose feature_importances_.")
+        else:
+            st.write("Feature list not found; re-save from the notebook.")
+
+
+
+
+    with st.expander("Inputs expected by the model"):
+        st.json(feature_list or ["No feature_list.pkl loaded"])
+
+
 st.caption("Disclaimer: This is an estimation tool; real performance depends on platform dynamics, timing, and audience.")
