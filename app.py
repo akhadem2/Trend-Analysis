@@ -23,6 +23,14 @@ try:
 except ImportError:  # joblib is bundled with sklearn, fallback
     joblib = None
 
+def load_label_map(col, cat_col, csv_path="data/youtube_shorts_tiktok_trends_2025.csv_ML.csv"):
+    try:
+        df_map = pd.read_csv(csv_path, usecols=[col, cat_col]).dropna().drop_duplicates()
+        df_map = df_map.sort_values(cat_col)
+        return [(row[col], int(row[cat_col])) for _, row in df_map.iterrows()]
+    except Exception as e:
+        st.warning(f"Could not load {col} mapping: {e}")
+        return []
 
 MODEL_PATH = os.path.join("models", "trend_model.pkl")
 
@@ -85,12 +93,26 @@ with st.form("video_form"):
     shares_7d = st.number_input("Expected Shares (7d)", min_value=0, value=300, step=10)
 
     st.markdown("### Context (optional rough categories)")
-    trend_label = st.selectbox("Prior performance label (if any)", ["rising", "seasonal", "stable", "declining"], index=0)
-    category_cat = st.number_input("Category code", min_value=0, value=7)
-    region_cat = st.number_input("Region code", min_value=0, value=5)
-    language_cat = st.number_input("Language code", min_value=0, value=1)
-    platform_cat = st.number_input("Platform code", min_value=0, value=2)
-    creator_tier_cat = st.number_input("Creator tier code", min_value=0, value=1)
+    platform_options = load_label_map("platform", "platform_cat")
+    region_options = load_label_map("region", "region_cat")
+    language_options = load_label_map("language", "language_cat")
+    category_options = load_label_map("category", "category_cat")
+    creator_tier_options = load_label_map("creator_tier", "creator_tier_cat")
+
+    platform_sel = st.selectbox("Platform", platform_options, format_func=lambda x: x[0])
+    platform_cat = platform_sel[1] if platform_sel else 2  # fallback
+
+    region_sel = st.selectbox("Region", region_options, format_func=lambda x: x[0])
+    region_cat = region_sel[1] if region_sel else 5
+
+    language_sel = st.selectbox("Language", language_options, format_func=lambda x: x[0])
+    language_cat = language_sel[1] if language_sel else 1
+
+    category_sel = st.selectbox("Category", category_options, format_func=lambda x: x[0])
+    category_cat = category_sel[1] if category_sel else 7
+
+    creator_tier_sel = st.selectbox("Creator tier", creator_tier_options, format_func=lambda x: x[0])
+    creator_tier_cat = creator_tier_sel[1] if creator_tier_sel else 1
 
     submitted = st.form_submit_button("Estimate Viral Potential")
 
