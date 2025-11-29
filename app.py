@@ -235,10 +235,7 @@ else:
             f1_macro = holdout.get("f1_macro")
             label = "model"
 
-        if cv_mean is not None and cv_std is not None:
-            st.markdown(f"- {label} CV macro F1: {cv_mean:.3f} ± {cv_std:.3f}")
-        if acc is not None and f1_macro is not None:
-            st.markdown(f"- {label} Holdout: acc {acc:.3f}, macro F1 {f1_macro:.3f}")
+    
 
 
 
@@ -265,7 +262,10 @@ else:
         st.markdown(f"- **Classes:** {', '.join(classes)}")
 
     st.markdown(f"- **Model:** {model_name}")
-    
+    if cv_mean is not None and cv_std is not None:
+        st.markdown(f"- {label} CV macro F1: {cv_mean:.3f} ± {cv_std:.3f}")
+    if acc is not None and f1_macro is not None:
+        st.markdown(f"- {label} Holdout: acc {acc:.3f}, macro F1 {f1_macro:.3f}")    
     if feature_list:
         st.markdown(f"- **Feature count:** {len(feature_list)}")
         st.markdown(f"- **Key features:** {', '.join(feature_list[:8])} …")
