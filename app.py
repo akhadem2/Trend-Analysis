@@ -173,7 +173,9 @@ if submitted:
         "region_platform_avg_share_rate": viral_share_baseline,
         "region_platform_avg_rel_like": 1.0,
         "region_platform_avg_rel_share": 1.0,
-                "title_sentiment": sentiment_score or 0.0,  # add this line
+        "title_sentiment": sentiment_score or 0.0,
+        "trending_hashtag_hits": content_feats.get("trending_hashtag_hits", 0),
+        "trending_hashtag_ratio": content_feats.get("trending_hashtag_ratio", 0.0),
 
     }
 
@@ -206,6 +208,8 @@ if submitted:
                     st.write("Consider a more positive or curiosity-driven phrasing to boost engagement.")
                 elif sentiment_score > 0.7:
                     st.write("High positive sentiment; balance with a hook or question to drive interaction.")
+        
+
     else:
         # Simple heuristic fallback: combine signals
         heuristic = (
