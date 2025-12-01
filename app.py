@@ -75,6 +75,97 @@ if os.path.exists(feature_list_path) and joblib is not None:
         feature_list = joblib.load(feature_list_path)
     except Exception as e:
         st.warning(f"Could not load feature list: {e}")
+
+# Load metrics
+metrics_path = os.path.join("models", "metrics.json")
+metrics_data = None
+if os.path.exists(metrics_path):
+    try:
+        import json
+        with open(metrics_path) as f:
+            metrics_data = json.load(f)
+    except Exception as e:
+        st.warning(f"Could not load metrics: {e}")
+
+# Display Model Performance Dashboard
+if metrics_data or feature_list:
+    st.header("📊 Model Performance Dashboard")
+    
+    # Model Comparison
+    if metrics_data:
+        st.subheader("Model Comparison")
+        
+        model_names = []
+        cv_f1_means = []
+        cv_f1_stds = []
+        holdout_accs = []
+        holdout_f1s = []
+        
+        for model_name, metrics in metrics_data.items():
+            if model_name != "selected" and isinstance(metrics, dict):
+                display_name = model_name.replace("_", " ").title()
+                model_names.append(display_name)
+                cv_f1_means.append(metrics.get("cv_f1_mean", 0))
+                cv_f1_stds.append(metrics.get("cv_f1_std", 0))
+                holdout_accs.append(metrics.get("acc", 0))
+                holdout_f1s.append(metrics.get("f1_macro", 0))
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Cross-Validation F1 Scores**")
+            cv_chart_data = pd.DataFrame({
+                "Model": model_names,
+                "CV F1 Score": cv_f1_means
+            })
+            st.bar_chart(cv_chart_data.set_index("Model"))
+        
+        with col2:
+            st.markdown("**Holdout Test Accuracy**")
+            holdout_chart_data = pd.DataFrame({
+                "Model": model_names,
+                "Accuracy": holdout_accs
+            })
+            st.bar_chart(holdout_chart_data.set_index("Model"))
+        
+        # Detailed metrics table
+        st.markdown("**Detailed Metrics**")
+        metrics_df = pd.DataFrame({
+            "Model": model_names,
+            "CV F1 (mean)": [f"{x:.4f}" for x in cv_f1_means],
+            "CV F1 (std)": [f"{x:.4f}" for x in cv_f1_stds],
+            "Test Accuracy": [f"{x:.4f}" for x in holdout_accs],
+            "Test F1-Macro": [f"{x:.4f}" for x in holdout_f1s]
+        })
+        st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+        
+        selected_model = metrics_data.get("selected", "unknown")
+        st.success(f"✓ Selected Model: **{selected_model.replace('_', ' ').title()}**")
+    
+    # Feature Importance
+    if feature_list and model is not None:
+        st.subheader("Top Feature Importance")
+        try:
+            importance_map = compute_feature_importance(model, feature_list)
+            top_feats = rank_top_features(importance_map, top_n=10)
+            
+            importance_df = pd.DataFrame({
+                "Feature": [f["feature"] for f in top_feats],
+                "Importance": [f["importance"] for f in top_feats]
+            })
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.bar_chart(importance_df.set_index("Feature"))
+            with col2:
+                st.markdown("**Ranked Features**")
+                for i, f in enumerate(top_feats, 1):
+                    st.text(f"{i}. {f['feature']}: {f['importance']:.4f}")
+        except Exception as e:
+            st.warning(f"Could not compute feature importance: {e}")
+    
+    st.divider()
+
 if model is None:
     st.warning(
         "No trained model found at models/trend_model.pkl. Train in 02_Modeling.ipynb and save via joblib.dump(model, 'models/trend_model.pkl'). Using heuristic fallback.")
@@ -260,107 +351,6 @@ else:
             acc = holdout.get("accuracy")
             f1_macro = holdout.get("f1_macro")
             label = "model"
-
-    
-
-
-
-
-    label_encoder_path = os.path.join("models", "label_encoder.pkl")
-    if os.path.exists(label_encoder_path) and joblib is not None:
-        try:
-            model.label_encoder_ = joblib.load(label_encoder_path)
-            model.class_labels_ = model.label_encoder_.classes_
-        except Exception as e:
-            st.warning(f"Could not load label encoder: {e}")
-
-    model_name = type(getattr(model, "named_steps", {}).get("model", model)).__name__
-    raw_classes = getattr(model, "class_labels_", None)
-    if raw_classes is None:
-        raw_classes = getattr(model, "classes_", None)
-
-    if raw_classes is None:
-        classes = []
-    else:
-        classes = list(raw_classes.tolist()) if hasattr(raw_classes, "tolist") else list(raw_classes)
-
-    if classes:
-        st.markdown(f"- **Classes:** {', '.join(classes)}")
-
-    st.markdown(f"- **Model:** {model_name}")
-    if cv_mean is not None and cv_std is not None:
-        st.markdown(f"- {label} CV macro F1: {cv_mean:.3f} ± {cv_std:.3f}")
-    if acc is not None and f1_macro is not None:
-        st.markdown(f"- {label} Holdout: acc {acc:.3f}, macro F1 {f1_macro:.3f}")    
-    if feature_list:
-        st.markdown(f"- **Feature count:** {len(feature_list)}")
-        st.markdown(f"- **Key features:** {', '.join(feature_list[:8])} …")
-
-
-    st.subheader("Model Catalog")
-    metrics_path = os.path.join("models", "metrics.json")
-    if os.path.exists(metrics_path):
-        import json
-        with open(metrics_path) as f:
-            m = json.load(f)
-        # Expecting a dict of model_name -> metrics; adjust keys to what you saved
-        # Example structure to save from the notebook:
-        # {
-        #   "random_forest": {"cv_f1_mean": 0.79, "cv_f1_std": 0.002, "acc": 0.837, "f1_macro": 0.798},
-        #   "xgb_smote": {"cv_f1_mean": 0.82, "cv_f1_std": 0.004, "acc": 0.85, "f1_macro": 0.83}
-        # }
-        chosen_type = type(getattr(model, "named_steps", {}).get("model", model)).__name__.lower()
-        selected_name = m.get("selected")
-        for name, stats in m.items():
-            if name == "selected":
-                continue
-            label = name
-            if selected_name and name == selected_name:
-                label = f"**{name}**"
-            elif name.lower() in chosen_type:
-                label = f"**{name}**"
-
-            cv_mean = stats.get("cv_f1_mean")
-            cv_std = stats.get("cv_f1_std")
-            acc = stats.get("acc")
-            f1_macro = stats.get("f1_macro")
-
-            parts = []
-            if cv_mean is not None and cv_std is not None:
-                parts.append(f"CV F1 {cv_mean:.3f} +/- {cv_std:.3f}")
-            if acc is not None:
-                parts.append(f"acc {acc:.3f}")
-            if f1_macro is not None:
-                parts.append(f"macro F1 {f1_macro:.3f}")
-
-            if parts:
-                st.markdown(f"- {label}: " + "; ".join(parts))
-            else:
-                st.markdown(f"- {label}: metrics not available")
-    else:
-        st.info("No metrics.json found; save metrics for each model from the notebook.")
-
-    
-    # If you saved CV metrics to disk, load and display them:
-    # cv_info_path = os.path.join("models", "cv_metrics.json")
-    # if os.path.exists(cv_info_path):
-    #     import json
-    #     with open(cv_info_path) as f:
-    #         cv_info = json.load(f)
-    #     st.markdown(f"- **CV macro F1:** {cv_info['f1_mean']:.3f} ± {cv_info['f1_std']:.3f}")
-
-    with st.expander("Feature Importance"):
-        has_features = feature_list is not None and len(feature_list) > 0
-        if has_features:
-            mdl = model.named_steps.get("model", model) if hasattr(model, "named_steps") else model
-            if hasattr(mdl, "feature_importances_"):
-                importances = mdl.feature_importances_
-                top = sorted(zip(feature_list, importances), key=lambda x: x[1], reverse=True)
-                st.table({"feature": [f for f, _ in top], "importance": [float(i) for _, i in top]})
-            else:
-                st.write("Model does not expose feature_importances_.")
-        else:
-            st.write("Feature list not found; re-save from the notebook.")
 
 
 

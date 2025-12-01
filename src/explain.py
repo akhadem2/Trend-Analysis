@@ -3,8 +3,19 @@ from typing import List, Dict, Any
 
 def compute_feature_importance(model, feature_list: List[str]) -> Dict[str, float]:
     """Return a mapping of feature -> importance if model supports it."""
-    if hasattr(model, 'feature_importances_'):
-        importances = model.feature_importances_
+    # Handle pipelines - extract the final estimator
+    if hasattr(model, 'named_steps'):
+        # It's a pipeline, get the actual model
+        if 'model' in model.named_steps:
+            actual_model = model.named_steps['model']
+        else:
+            # Try to get the last step
+            actual_model = list(model.named_steps.values())[-1]
+    else:
+        actual_model = model
+    
+    if hasattr(actual_model, 'feature_importances_'):
+        importances = actual_model.feature_importances_
         return {f: float(importances[i]) for i, f in enumerate(feature_list) if i < len(importances)}
     return {f: 0.0 for f in feature_list}
 
